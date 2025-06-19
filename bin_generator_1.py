@@ -50,14 +50,14 @@ class BoltBinApp:
         Tooltip(bin_menu, "Select 56 or 72 slot bin")
 
         # Bolt size and length inputs
-        tk.Label(self.root, text="Bolt Size (e.g., 1/4):").grid(row=1, column=0, padx=5, pady=5, sticky="e")
+        tk.Label(self.root, text="Bolt Size (e.g., 1/4):").grid(row=1, column=5, padx=0, pady=5, sticky="e")
         self.size_entry = tk.Entry(self.root, width=10)
         self.size_entry.grid(row=1, column=1, padx=5, pady=5, sticky="w")
         Tooltip(self.size_entry, "Enter bolt diameter like 1/4 or 1-1/2")
 
         tk.Label(self.root, text="Length (e.g., 1-1/2):").grid(row=2, column=0, padx=5, pady=5, sticky="e")
         self.length_entry = tk.Entry(self.root, width=10)
-        self.length_entry.grid(row=2, column=1, padx=5, pady=5, sticky="w")
+        self.length_entry.grid(row=2, column=5, padx=1, sticky="w")
         Tooltip(self.length_entry, "Enter bolt length like 1 or 2-1/4")
 
         # Buttons frame
@@ -74,25 +74,20 @@ class BoltBinApp:
         clear_btn.grid(row=0, column=1, padx=5)
         Tooltip(clear_btn, "Reset all bolts and start over")
 
-        # Generate layout button
-        gen_btn = tk.Button(self.root, text="Generate Layout", command=self.generate_layout)
-        gen_btn.grid(row=4, column=0, columnspan=2, pady=5)
-        Tooltip(gen_btn, "Create and view your bolt bin layout")
-
         # Save as PDF button
         pdf_btn = tk.Button(self.root, text="Save as PDF", command=self.save_pdf)
-        pdf_btn.grid(row=5, column=0, columnspan=2, pady=5)
+        pdf_btn.grid(row=4, column=0, columnspan=2, pady=5)
         Tooltip(pdf_btn, "Save your bolt bin layout as a PDF file")
 
         # Output display (text)
         self.output = tk.Text(self.root, height=5, width=40)
-        self.output.grid(row=6, column=0, columnspan=2, padx=5, pady=5)
+        self.output.grid(row=5, column=0, columnspan=2, padx=5, pady=5)
         Tooltip(self.output, "Your bolt bin layout (text)")
 
         # Grid display (canvas)
-        tk.Label(self.root, text="Bin Layout Preview:").grid(row=7, column=0, columnspan=2, pady=5)
+        tk.Label(self.root, text="Bin Layout Preview:").grid(row=6, column=0, columnspan=2, pady=5)
         self.canvas = Canvas(self.root, width=400, height=200, bg="white")
-        self.canvas.grid(row=8, column=0, columnspan=2, padx=5, pady=5)
+        self.canvas.grid(row=7, column=0, columnspan=2, padx=5, pady=5)
         Tooltip(self.canvas, "Visual preview of your bolt bin (rows = sizes, columns = lengths)")
 
     def parse_fraction(self, text):
@@ -150,18 +145,18 @@ class BoltBinApp:
         messagebox.showinfo("Cleared", "All bolts cleared. Start fresh!")
 
     def format_number(self, num):
-        """Convert decimal to fraction if needed."""
+        """Convert decimal to fraction if needed, including common bolt fractions."""
         if num.is_integer():
             return str(int(num))
         whole = int(num)
         frac = num - whole
-        for denom in range(2, 9):
+        for denom in range(2, 17):  # Check up to 16 for 5/16, 7/16, 9/16
             num_frac = round(frac * denom)
-            if abs(frac * denom - num_frac) < 0.01:
+            if abs(frac * denom - num_frac) < 0.001:  # Tighter tolerance
                 if whole == 0:
                     return f"{num_frac}/{denom}"
                 return f"{whole}-{num_frac}/{denom}"
-        return f"{num:.2f}"
+        return f"{num:.2f}"  # Fallback to decimal if no fraction matches
 
     def update_output(self):
         self.output.delete(1.0, tk.END)
@@ -173,8 +168,8 @@ class BoltBinApp:
     def update_grid(self):
         self.canvas.delete("all")
         bin_slots = int(self.bin_size.get())
-        rows = 7 if bin_slots == 56 else 9  # 56 = 8x7, 72 = 8x9
-        cols = self.max_lengths  # Max 8 lengths per size
+        rows = 7 if bin_slots == 56 else 9
+        cols = self.max_lengths
         cell_width = 40
         cell_height = 25
         offset_x, offset_y = 50, 30
@@ -201,24 +196,6 @@ class BoltBinApp:
                                        offset_y + i * cell_height + cell_height / 2,
                                        text=length_str, anchor="center")
 
-    def generate_layout(self):
-        bin_slots = int(self.bin_size.get())
-        total_slots = sum(len(lengths) for _, lengths in self.bolts)
-        
-        if total_slots == 0:
-            messagebox.showerror("Error", "No bolts added!")
-            return
-        if total_slots > bin_slots:
-            messagebox.showerror("Error", f"Too many bolts! {total_slots} slots used, but only {bin_slots} available.")
-            return
-        if len(self.bolts) > (7 if bin_slots == 56 else 9):
-            messagebox.showerror("Error", f"Too many sizes! Max {7 if bin_slots == 56 else 9} sizes allowed.")
-            return
-
-        self.update_output()
-        self.update_grid()
-        messagebox.showinfo("Success", "Layout generated! See the text and grid below.")
-
     def save_pdf(self):
         if not self.bolts:
             messagebox.showerror("Error", "No bolts to save! Add some bolts first.")
@@ -238,6 +215,7 @@ class BoltBinApp:
         c.drawString(100, 730, f"Bin Size: {self.bin_size.get()} slots")
         c.drawString(100, 710, "Material: Grade 5 Zinc, Coarse Threads")
 
+        # List bolts
         y = 690
         for i, (size, lengths) in enumerate(self.bolts, 1):
             size_str = self.format_number(size)
@@ -245,10 +223,44 @@ class BoltBinApp:
             text = f"Row {i}: {size_str}\" ({length_str}\")"
             c.drawString(100, y, text)
             y -= 20
-            if y < 50:
+            if y < 400:  # Reserve space for grid
                 c.showPage()
                 c.setFont("Helvetica", 12)
                 y = 750
+
+        # Draw grid layout
+        c.drawString(100, y, "Bin Layout:")
+        y -= 20
+        bin_slots = int(self.bin_size.get())
+        rows = 7 if bin_slots == 56 else 9
+        cols = self.max_lengths
+        cell_width = 30
+        cell_height = 20
+        offset_x, offset_y = 100, y - 20
+        text_height = 5  # Approximate text height for centering
+
+        # Draw grid lines
+        for i in range(rows + 1):
+            y_pos = offset_y - i * cell_height
+            c.line(offset_x, y_pos, offset_x + cols * cell_width, y_pos)
+        for j in range(cols + 1):
+            x_pos = offset_x + j * cell_width
+            c.line(x_pos, offset_y, x_pos, offset_y - rows * cell_height)
+
+        # Label rows with sizes
+        c.setFont("Helvetica", 10)
+        for i, (size, _) in enumerate(self.bolts[:rows], 0):
+            size_str = self.format_number(size)
+            c.drawString(offset_x - 40, offset_y - i * cell_height - cell_height / 2 - text_height,
+                         f"{size_str}\"")
+
+        # Fill cells with lengths
+        for i, (size, lengths) in enumerate(self.bolts[:rows], 0):
+            for j, length in enumerate(lengths[:cols]):
+                length_str = self.format_number(length)
+                c.drawCentredString(offset_x + j * cell_width + cell_width / 2,
+                                   offset_y - i * cell_height - cell_height / 2 - text_height,
+                                   length_str)
 
         c.save()
         messagebox.showinfo("Success", f"Layout saved as PDF: {os.path.basename(file_path)}")
@@ -257,3 +269,4 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = BoltBinApp(root)
     root.mainloop()
+    
