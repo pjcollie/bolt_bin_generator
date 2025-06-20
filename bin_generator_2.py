@@ -4,6 +4,9 @@ import re
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 import os
+import tempfile
+import platform
+import subprocess
 
 # Main app class
 class BoltBinApp:
@@ -11,9 +14,9 @@ class BoltBinApp:
         self.root = root
         self.root.title("Bolt Bin Generator - Active Bolt & Screw")
         self.bolts = []  # List of (size, lengths, items) tuples
-        self.max_lengths = 4  # Max lengths per size
+        self.max_lengths = 4  # Max lengths per size (used for grid display)
         self.max_items = 4    # Max items (Nut, Flatwasher, Lockwasher, Locknut, Blank)
-        self.root.geometry("600x700")  # Wider and taller window
+        self.root.geometry("600x750")  # Wider and taller window to accommodate larger canvas
         self.setup_gui()
 
     def setup_gui(self):
@@ -72,7 +75,11 @@ class BoltBinApp:
 
         # Save as PDF button
         pdf_btn = tk.Button(main_frame, text="Save as PDF", command=self.save_pdf)
-        pdf_btn.grid(row=5, column=0, columnspan=2, pady=10)
+        pdf_btn.grid(row=5, column=0, pady=10, sticky="e")
+
+        # Print PDF button
+        print_btn = tk.Button(main_frame, text="Print PDF", command=self.print_pdf)
+        print_btn.grid(row=5, column=1, pady=10, sticky="w")
 
         # Output display (text)
         self.output = tk.Text(main_frame, height=5, width=50)
@@ -80,10 +87,11 @@ class BoltBinApp:
 
         # Grid display (canvas)
         tk.Label(main_frame, text="Bin Layout Preview:").grid(row=7, column=0, columnspan=2, pady=10)
-        self.canvas = Canvas(main_frame, width=550, height=300, bg="white")
+        self.canvas = Canvas(main_frame, width=550, height=350, bg="white")  # Increased height for 72-slot bin
         self.canvas.grid(row=8, column=0, columnspan=2, padx=10, pady=10, sticky="ew")
         main_frame.columnconfigure(0, weight=1)
         main_frame.columnconfigure(1, weight=1)
+        self.update_grid()  # Draw empty grid on startup
 
     def reset_on_material_or_size_change(self, event):
         """Reset bolts and items when material or bin size changes."""
@@ -92,6 +100,7 @@ class BoltBinApp:
             self.output.delete(1.0, tk.END)
             self.canvas.delete("all")
             messagebox.showinfo("Reset", "Bolts and items cleared due to material or bin size change.")
+        self.update_grid()  # Ensure canvas updates after reset
 
     def parse_fraction(self, text):
         """Convert fraction like 1-1/2 to decimal."""
@@ -161,8 +170,11 @@ class BoltBinApp:
         # Check if size exists
         for bolt in self.bolts:
             if abs(bolt[0] - size_val) < 0.001:
-                if len(bolt[1]) >= self.max_lengths:
-                    messagebox.showerror("Error", f"Cannot add more than {self.max_lengths} lengths for size {size}.")
+                # Check if adding a length exceeds the row capacity (items + lengths)
+                row_capacity = self.max_items + self.max_lengths
+                current_slots = len(bolt[2]) + len(bolt[1])
+                if current_slots >= row_capacity:
+                    messagebox.showerror("Error", f"Cannot add more items or lengths for size {size}. Row capacity ({row_capacity}) reached.")
                     return
                 if length_val not in bolt[1]:
                     bolt[1].append(length_val)
@@ -194,8 +206,9 @@ class BoltBinApp:
         # Check if size exists
         for bolt in self.bolts:
             if abs(bolt[0] - size_val) < 0.001:
-                if len(bolt[2]) >= self.max_items:
-                    messagebox.showerror("Error", f"Cannot add more than {self.max_items} items (including blanks) for size {size}.")
+                row_capacity = self.max_items + self.max_lengths
+                if len(bolt[2]) + len(bolt[1]) >= row_capacity:
+                    messagebox.showerror("Error", f"Cannot add more items or lengths (including blanks) for size {size}. Row capacity ({row_capacity}) reached.")
                     return
                 if "Blank" not in bolt[2]:
                     bolt[2].add("Blank")
@@ -204,8 +217,8 @@ class BoltBinApp:
             # New size, show item pop-up
             items = self.show_item_popup(size)
             items.add("Blank")
-            if len(items) > self.max_items:
-                messagebox.showerror("Error", f"Cannot add more than {self.max_items} items (including blank) for size {size}.")
+            if len(items) + len([]) > self.max_items + self.max_lengths:
+                messagebox.showerror("Error", f"Cannot add more than {self.max_items + self.max_lengths} items and lengths (including blank) for size {size}.")
                 return
             self.bolts.append((size_val, [], items))
             self.bolts.sort(key=lambda x: x[0])
@@ -238,6 +251,7 @@ class BoltBinApp:
         self.output.delete(1.0, tk.END)
         self.canvas.delete("all")
         messagebox.showinfo("Cleared", "All bolts and items cleared. Start fresh!")
+        self.update_grid()  # Ensure canvas updates after clear
 
     def format_number(self, num):
         """Convert decimal to fraction if needed."""
@@ -265,16 +279,16 @@ class BoltBinApp:
     def update_grid(self):
         self.canvas.delete("all")
         bin_slots = int(self.bin_size.get())
-        rows = 7 if bin_slots == 56 else 9
+        max_rows = 7 if bin_slots == 56 else 9  # Maximum rows based on bin size
+        rows = max_rows if not self.bolts else min(len(self.bolts), max_rows)  # Use max_rows for empty grid
         cols = self.max_items + self.max_lengths  # Up to 4 items + 4 lengths
         cell_width = 40
         cell_height = 30
-        offset_x, offset_y = 60, 40
-
-        # If no bolts, display a message
-        if not self.bolts:
-            self.canvas.create_text(275, 150, text="No bolts or items added yet.", font=("TkDefaultFont", 12), anchor="center")
-            return
+        # Center the grid: canvas width=550, height=350
+        grid_width = cols * cell_width  # 8 * 40 = 320
+        grid_height = rows * cell_height  # Up to 9 * 30 = 270
+        offset_x = (550 - grid_width) / 2  # (550 - 320) / 2 = 115
+        offset_y = (350 - grid_height) / 2  # For 9 rows: (350 - 270) / 2 = 40
 
         # Draw grid
         for i in range(rows + 1):
@@ -284,7 +298,7 @@ class BoltBinApp:
             x = offset_x + j * cell_width
             self.canvas.create_line(x, offset_y, x, offset_y + rows * cell_height, fill="black")
 
-        # Label rows with sizes
+        # Label rows with sizes (only if bolts exist)
         for i, (size, _, _) in enumerate(self.bolts[:rows], 0):
             size_str = self.format_number(size)
             self.canvas.create_text(offset_x - 20, offset_y + i * cell_height + cell_height / 2,
@@ -309,8 +323,14 @@ class BoltBinApp:
                                        offset_y + i * cell_height + cell_height / 2,
                                        text=length_str, anchor="center", font=("TkDefaultFont", 11), fill="black")
 
-        # Debug text
-        #self.canvas.create_text(275, offset_y - 20, text="Preview", font=("TkDefaultFont", 10), anchor="center", fill="blue")
+        # Add column headers
+        item_labels = ["Nut", "Flatwasher", "Lockwasher", "Locknut"]
+        for j in range(self.max_items):
+            self.canvas.create_text(offset_x + j * cell_width + cell_width / 2,
+                                   offset_y - 10, text=item_labels[j][0], anchor="center", font=("TkDefaultFont", 10))
+        for j in range(self.max_lengths):
+            self.canvas.create_text(offset_x + (j + self.max_items) * cell_width + cell_width / 2,
+                                   offset_y - 10, text=f"Len {j+1}", anchor="center", font=("TkDefaultFont", 10))
 
     def save_pdf(self):
         if not self.bolts:
@@ -389,6 +409,97 @@ class BoltBinApp:
 
         c.save()
         messagebox.showinfo("Success", f"Layout saved as PDF: {os.path.basename(file_path)}")
+
+    def print_pdf(self):
+        if not self.bolts:
+            messagebox.showerror("Error", "No bolts or items to print! Add some first.")
+            return
+
+        # Create a temporary PDF file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+            file_path = tmp_file.name
+            c = canvas.Canvas(file_path, pagesize=letter)
+            c.setFont("Helvetica", 12)
+            c.drawString(100, 750, "Bolt Bin Layout - Active Bolt & Screw")
+            c.drawString(100, 730, f"Bin Size: {self.bin_size.get()} slots")
+            c.drawString(100, 710, f"Material: {self.material.get()}")
+
+            # List bolts and items
+            y = 690
+            for i, (size, lengths, items) in enumerate(self.bolts, 1):
+                size_str = self.format_number(size)
+                items_str = ", ".join(sorted([items for items in items if items != "Blank"] + ["Blank" for _ in items if items == "Blank"]))
+                lengths_str = ", ".join(self.format_number(l) for l in lengths)
+                contents = ", ".join(filter(None, [items_str, lengths_str]))
+                text = f"Row {i}: {size_str}\" ({contents})"
+                c.drawString(100, y, text)
+                y -= 20
+                if y < 400:
+                    c.showPage()
+                    c.setFont("Helvetica", 12)
+                    y = 750
+
+            # Draw grid layout
+            c.drawString(100, y, "Bin Layout:")
+            y -= 20
+            bin_slots = int(self.bin_size.get())
+            rows = 7 if bin_slots == 56 else 9
+            cols = self.max_items + self.max_lengths
+            cell_width = 25
+            cell_height = 20
+            offset_x, offset_y = 100, y - 20
+            text_height = 5
+
+            # Draw grid lines
+            for i in range(rows + 1):
+                y_pos = offset_y - i * cell_height
+                c.line(offset_x, y_pos, offset_x + cols * cell_width, y_pos)
+            for j in range(cols + 1):
+                x_pos = offset_x + j * cell_width
+                c.line(x_pos, offset_y, x_pos, offset_y - rows * cell_height)
+
+            # Label rows with sizes
+            c.setFont("Helvetica", 10)
+            for i, (size, _, _) in enumerate(self.bolts[:rows], 0):
+                size_str = self.format_number(size)
+                c.drawString(offset_x - 40, offset_y - i * cell_height - cell_height / 2 - text_height,
+                             f"{size_str}\"")
+
+            # Draw item and length cells
+            for i, (size, lengths, items) in enumerate(self.bolts[:rows], 0):
+                item_list = [item for item in ["Nut", "Flatwasher", "Lockwasher", "Locknut", "Blank"] if item in items]
+                for j, item in enumerate(item_list[:self.max_items]):
+                    if item != "Blank":
+                        item_char = {"Nut": "N", "Flatwasher": "F", "Lockwasher": "L", "Locknut": "LN"}[item]
+                        c.drawCentredString(offset_x + j * cell_width + cell_width / 2,
+                                           offset_y - i * cell_height - cell_height / 2 - text_height, item_char)
+                    # Blank cells are left empty
+                start_col = len(item_list)
+                for j, length in enumerate(lengths[:self.max_lengths]):
+                    length_str = self.format_number(length)
+                    c.drawCentredString(offset_x + (j + start_col) * cell_width + cell_width / 2,
+                                       offset_y - i * cell_height - cell_height / 2 - text_height, length_str)
+
+            c.save()
+
+        # Print the PDF
+        try:
+            if platform.system() == "Windows":
+                os.startfile(file_path, "print")
+            elif platform.system() in ("Linux", "Darwin"):
+                subprocess.run(["lp", file_path], check=True)
+            else:
+                messagebox.showerror("Error", f"Printing not supported on {platform.system()}.")
+                os.unlink(file_path)
+                return
+            messagebox.showinfo("Success", "PDF sent to printer.")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to print PDF: {str(e)}")
+        finally:
+            try:
+                os.unlink(file_path)  # Delete the temporary file
+            except Exception:
+                pass
 
 if __name__ == "__main__":
     root = tk.Tk()
