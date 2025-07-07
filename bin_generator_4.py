@@ -1,4 +1,3 @@
-
 import json
 import re
 from kivy.app import App
@@ -87,8 +86,8 @@ class BinSizeScreen(Screen):
         self.layout.add_widget(Label(text='Choose Bin Size', font_size=sp(35), color=(0, 0, 0, 1), size_hint_y=0.2))
         btn_56 = ContrastButton(text='56 Holes', size_hint=(1, 0.3))
         btn_72 = ContrastButton(text='72 Holes', size_hint=(1, 0.3))
-        btn_56.bind(on_press=self.select_bin_size)
-        btn_72.bind(on_press=self.select_bin_size)
+        btn_56.bind(on_press=lambda x: self.select_bin_size('56'))
+        btn_72.bind(on_press=lambda x: self.select_bin_size('72'))
         back_btn = ContrastButton(text='Back', size_hint=(1, 0.2))
         back_btn.bind(on_press=self.go_to_start)
         self.layout.add_widget(btn_56)
@@ -96,10 +95,10 @@ class BinSizeScreen(Screen):
         self.layout.add_widget(back_btn)
         self.add_widget(self.layout)
 
-    def select_bin_size(self, instance):
+    def select_bin_size(self, size):
         app = App.get_running_app()
-        app.bin_size = instance.text.split()[0]
-        app.max_rows = 7 if app.bin_size == '56' else 9
+        app.bin_size = size
+        app.max_rows = 7 if size == '56' else 9
         self.manager.current = 'material'
 
     def go_to_start(self, instance):
@@ -223,47 +222,58 @@ class AddDiameterScreen(Screen):
         self.preview_layout.clear_widgets()
         self.preview_layout.canvas.clear()
 
+        # Set white background for the preview
         with self.preview_layout.canvas.before:
             Color(1, 1, 1, 1)  # White background
             self.preview_rect = Rectangle(size=self.preview_layout.size, pos=self.preview_layout.pos)
 
         self.preview_layout.bind(size=self._update_preview_rect, pos=self._update_preview_rect)
 
-        # Only draw the preview if there is data in bin_data
+        # Only draw the grid and labels if there are items in bin_data
         if app.bin_data:
             max_rows = app.max_rows
-            cell_width = self.preview_layout.width / 10
+            num_cols = 9  # 1 for diameter label, 8 for items
+            cell_width = self.preview_layout.width / num_cols
             cell_height = self.preview_layout.height / max_rows
 
-            # Draw grid
+            # Draw grid lines
             with self.preview_layout.canvas:
                 Color(0, 0, 0, 1)  # Black lines
                 for i in range(max_rows + 1):
                     Line(points=[0, i * cell_height, self.preview_layout.width, i * cell_height])
-                for i in range(11):
+                for i in range(num_cols + 1):
                     Line(points=[i * cell_width, 0, i * cell_width, self.preview_layout.height])
 
-            # Add column headers
-            for i, diam in enumerate([''] + Config.DIAMETERS):
-                lbl = Label(text=diam, size_hint=(None, None), size=(cell_width, cell_height),
-                            pos=(i * cell_width, self.preview_layout.height - cell_height), color=(0, 0, 0, 1))
-                self.preview_layout.add_widget(lbl)
-
-            # Add row labels
+            # Populate the grid with diameters and items
             for row in range(max_rows):
-                lbl = Label(text=str(row + 1), size_hint=(None, None), size=(cell_width, cell_height),
-                            pos=(0, (max_rows - 1 - row) * cell_height), color=(0, 0, 0, 1))
-                self.preview_layout.add_widget(lbl)
+                if row < len(app.bin_data):
+                    entry = app.bin_data[row]
+                    diameter = entry['diameter']
+                    # Combine lengths and items in the order they were selected
+                    selected_items = entry['lengths'] + entry['items']
 
-            # Add data labels
-            for i, entry in enumerate(app.bin_data):
-                if i >= max_rows:
-                    break
-                col = Config.DIAMETERS.index(entry['diameter']) + 1
-                length_text = ', '.join(entry['lengths']) if entry['lengths'] else ''
-                lbl = Label(text=length_text, size_hint=(None, None), size=(cell_width, cell_height),
-                            pos=(col * cell_width, (max_rows - 1 - i) * cell_height), color=(0, 0, 0, 1))
-                self.preview_layout.add_widget(lbl)
+                    # Add diameter label in the first column
+                    diameter_label = Label(
+                        text=diameter,
+                        size_hint=(None, None),
+                        size=(cell_width, cell_height),
+                        pos=(0, (max_rows - 1 - row) * cell_height),
+                        color=(0, 0, 0, 1)
+                    )
+                    self.preview_layout.add_widget(diameter_label)
+
+                    # Add selected items from left to right (up to 8 items)
+                    for col in range(1, num_cols):
+                        if col - 1 < len(selected_items):
+                            item = selected_items[col - 1]
+                            item_label = Label(
+                                text=item,
+                                size_hint=(None, None),
+                                size=(cell_width, cell_height),
+                                pos=(col * cell_width, (max_rows - 1 - row) * cell_height),
+                                color=(0, 0, 0, 1)
+                            )
+                            self.preview_layout.add_widget(item_label)
 
     def _update_preview_rect(self, instance, value):
         self.preview_rect.pos = instance.pos
@@ -451,4 +461,3 @@ class BoltBinApp(App):
 
 if __name__ == '__main__':
     BoltBinApp().run()
-    
