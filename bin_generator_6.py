@@ -110,18 +110,18 @@ class BinSizeScreen(Screen):
             Color(0, 0, 0, 1)
             self.rect = Rectangle(size=Window.size, pos=(0, 0))
         self.bind(size=self._update_rect, pos=self._update_rect)
-        self.layout.add_widget(Label(text='Choose Bin Size', font_size=sp(45), color=(1, 1, 1, 1), size_hint_y=0.2))
-        btn_56 = ContrastButton(text='56 Holes', size_hint=(1, 0.35), font_size=sp(45))
-        btn_72 = ContrastButton(text='72 Holes', size_hint=(1, 0.35), font_size=sp(45))
+        self.layout.add_widget(Label(text='Choose Bin Size', font_size=sp(60), color=(1, 1, 1, 1), size_hint_y=0.2))
+        btn_56 = ContrastButton(text='56 Holes', size_hint=(1, 0.35), font_size=sp(120))  # Increased font size
+        btn_72 = ContrastButton(text='72 Holes', size_hint=(1, 0.35), font_size=sp(120))  # Increased font size
         btn_56.bind(on_press=lambda x: self.select_bin_size('56'))
         btn_72.bind(on_press=lambda x: self.select_bin_size('72'))
-        back_btn = ContrastButton(text='Back', size_hint=(1, 0.2), font_size=sp(45))
+        back_btn = ContrastButton(text='Back', size_hint=(1, 0.2), font_size=sp(80))  # Kept consistent, but can adjust if needed
         back_btn.bind(on_press=self.go_to_start)
         self.layout.add_widget(btn_56)
         self.layout.add_widget(btn_72)
         self.layout.add_widget(back_btn)
         self.add_widget(self.layout)
-        print(f"BinSizeScreen: btn_56 font_size={btn_56.font_size}, btn_72 font_size={btn_72.font_size}")
+        print(f"BinSizeScreen: btn_56 font_size={btn_56.font_size}, btn_72 font_size={btn_72.font_size}, back_btn font_size={back_btn.font_size}")
 
     def _update_rect(self, instance, value):
         self.rect.pos = instance.pos
@@ -686,14 +686,24 @@ class SummaryScreen(Screen):
         if app.bin_data:
             max_rows = app.max_rows or 7
             num_cols = 8
-            layout_width = self.summary_layout.width * 0.95
-            layout_height = max_rows * sp(60)
+            layout_width = self.summary_layout.width * 0.9  # Match BinConfigScreen width ratio
+            layout_height = max_rows * sp(50)  # Match BinConfigScreen row height
             layout_x = (self.summary_layout.width - layout_width) / 2
-            layout_y = (self.summary_layout.height - layout_height) / 2 + sp(50)
+            # Target 65% from bottom of window, adjusted for layout position
+            target_y = Window.height * 0.65 - (layout_height / 2)  # Center the canvas at 65% from bottom
+            layout_y = max(0, target_y - self.summary_layout.y)  # Adjust for layout's y position
+
+            # Debug output to verify positions
+            print(f"SummaryScreen: Window.height={Window.height}, summary_layout.pos={self.summary_layout.pos}, "
+                  f"summary_layout.size={self.summary_layout.size}, layout_y={layout_y}, canvas_y={self.summary_layout.y + layout_y}")
+
+            # Use summary_layout's actual position
+            canvas_x = self.summary_layout.x + layout_x
+            canvas_y = self.summary_layout.y + layout_y
 
             with self.summary_layout.canvas.before:
                 Color(1, 1, 1, 1)
-                self.summary_rect = Rectangle(size=(layout_width, layout_height), pos=(layout_x, layout_y))
+                self.summary_rect = Rectangle(size=(layout_width, layout_height), pos=(canvas_x, canvas_y))
 
             self.summary_layout.bind(size=self._update_summary_rect, pos=self._update_summary_rect)
 
@@ -703,9 +713,9 @@ class SummaryScreen(Screen):
             with self.summary_layout.canvas:
                 Color(0, 0, 0, 1)
                 for i in range(max_rows + 1):
-                    Line(points=[layout_x, layout_y + i * cell_height, layout_x + layout_width, layout_y + i * cell_height])
+                    Line(points=[canvas_x, canvas_y + i * cell_height, canvas_x + layout_width, canvas_y + i * cell_height])
                 for i in range(num_cols + 1):
-                    Line(points=[layout_x + i * cell_width, layout_y, layout_x + i * cell_width, layout_y + layout_height])
+                    Line(points=[canvas_x + i * cell_width, canvas_y, canvas_x + i * cell_width, canvas_y + layout_height])
 
             for row in range(max_rows):
                 if row < len(app.bin_data):
@@ -721,41 +731,321 @@ class SummaryScreen(Screen):
                             text=size_text,
                             size_hint=(None, None),
                             size=(cell_width, cell_height),
-                            pos=(layout_x + col * cell_width, layout_y + (max_rows - 1 - row) * cell_height),
-                            color=(0, 0, 0, 1)
+                            pos=(canvas_x + col * cell_width, canvas_y + (max_rows - 1 - row) * cell_height),
+                            color=(0, 0, 0, 1),
+                            font_size=sp(14),
+                            halign='center',
+                            valign='center',
+                            text_size=(cell_width - sp(4), cell_height - sp(4))
                         )
                         self.summary_layout.add_widget(item_label)
 
     def _update_summary_rect(self, instance, value):
         app = App.get_running_app()
         max_rows = app.max_rows or 7
-        layout_width = instance.width * 0.95
-        layout_height = max_rows * sp(60)
+        layout_width = instance.width * 0.9  # Match BinConfigScreen width ratio
+        layout_height = max_rows * sp(50)  # Match BinConfigScreen row height
         layout_x = (instance.width - layout_width) / 2
-        layout_y = (instance.height - layout_height) / 2 + sp(50)
-        self.summary_rect.pos = (layout_x, layout_y)
+        # Target 65% from bottom of window, adjusted for layout position
+        target_y = Window.height * 0.65 - (layout_height / 2)  # Center the canvas at 65% from bottom
+        layout_y = max(0, target_y - instance.y)  # Adjust for layout's y position
+
+        # Use summary_layout's actual position
+        canvas_x = instance.x + layout_x
+        canvas_y = instance.y + layout_y
+        self.summary_rect.pos = (canvas_x, canvas_y)
         self.summary_rect.size = (layout_width, layout_height)
 
     def save_to_file(self, instance):
         app = App.get_running_app()
         data = {
-            'name': app.name,
-            'phone': app.phone,
-            'bin_size': app.bin_size,
-            'material': app.material,
-            'bin_data': app.bin_data
+            'name': app.name or "Not specified",
+            'phone': app.phone or "Not specified",
+            'bin_size': app.bin_size or "Not specified",
+            'material': app.material or "Not specified",
+            'bin_data': app.bin_data or []
         }
+
+        from docx import Document
+        from docx.oxml.ns import qn
+        from docx.oxml import OxmlElement
+        import os
+        import platform
+
+        # Create a new Document
+        doc = Document()
+        doc.core_properties.title = "Bolt Bin Configuration"
+        doc.core_properties.author = data['name'] or "Unknown"
+        doc.core_properties.created = datetime.datetime.now()
+
+        # Add title
+        doc.add_heading("Bolt Bin Configuration", 0)
+
+        # Add configuration details
+        doc.add_paragraph(f"Name: {data['name']}")
+        doc.add_paragraph(f"Phone: {data['phone']}")
+        doc.add_paragraph(f"Bin Size: {data['bin_size']}")
+        doc.add_paragraph(f"Material: {data['material']}")
+
+        # Add table for bin data
+        table = doc.add_table(rows=1, cols=2)
+        table.style = 'Table Grid'
+        hdr_cells = table.rows[0].cells
+        hdr_cells[0].text = "Diameter"
+        hdr_cells[1].text = "Items/Lengths"
+
+        if data['bin_data']:
+            for entry in data['bin_data']:
+                diameter = entry.get('diameter', 'N/A')
+                items = sorted([item for item in entry.get('items', []) if item in Config.ITEM_OPTIONS])
+                lengths = sorted(entry.get('lengths', []), key=convert_to_decimal)
+                selected_items = items + lengths
+                if selected_items:
+                    row_cells = table.add_row().cells
+                    row_cells[0].text = diameter
+                    row_cells[1].text = ', '.join(selected_items)
+        else:
+            row_cells = table.add_row().cells
+            row_cells[0].text = "None"
+            row_cells[1].text = "N/A"
+
+        # Set table width to 100% of page
+        table.autofit = False
+        table_width = OxmlElement('w:tblW')
+        table_width.set(qn('w:w'), '5000')
+        table_width.set(qn('w:type'), 'pct')
+        table._tblPr.append(table_width)
+
+        # Save to desktop
+        if platform.system() == "Darwin":  # macOS
+            desktop_path = os.path.join(os.path.expanduser("~"), "Desktop", "bin_config.docx")
+        else:
+            desktop_path = os.path.join(os.path.expanduser("~"), "Desktop", "bin_config.docx")
+
         try:
-            with open('bin_config.json', 'w') as f:
-                json.dump(data, f, indent=4)
-            popup = Popup(title='Success', content=Label(text='Configuration saved to bin_config.json', font_size=sp(20), color=(1, 1, 1, 1)), size_hint=(0.5, 0.5), background_color=(0, 0, 0, 1))
+            doc.save(desktop_path)
+            popup = Popup(title='Success', content=Label(text='Configuration saved to bin_config.docx on Desktop', font_size=sp(20), color=(1, 0, 0, 1)), size_hint=(0.5, 0.5), background_color=(0, 0, 0, 1))
             popup.open()
         except Exception as e:
-            popup = Popup(title='Error', content=Label(text=f'Failed to save: {str(e)}', font_size=sp(20), color=(1, 1, 1, 1)), size_hint=(0.5, 0.5), background_color=(0, 0, 0, 1))
+            print(f"Error during save: {str(e)}")  # Debug output
+            popup = Popup(title='Error', content=Label(text=f'Failed to save DOCX: {str(e)}', font_size=sp(20), color=(1, 0, 0, 1)), size_hint=(0.5, 0.5), background_color=(0, 0, 0, 1))
             popup.open()
 
     def go_to_bin_config(self, instance):
         self.manager.current = 'bin_config'
+
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.layout = BoxLayout(orientation='vertical', padding=sp(20), spacing=sp(20), size_hint=(1, 1))
+        with self.canvas.before:
+            Color(0, 0, 0, 1)
+            self.rect = Rectangle(size=Window.size, pos=(0, 0))
+        self.bind(size=self._update_rect, pos=self._update_rect)
+        self.summary_layout = FloatLayout(size_hint_y=0.7)
+        self.layout.add_widget(self.summary_layout)
+        save_btn = ContrastButton(text='Save to File', size_hint=(1, 0.1))
+        done_btn = ContrastButton(text='Done', size_hint=(1, 0.1))
+        back_btn = ContrastButton(text='Back', size_hint=(1, 0.1))
+        save_btn.bind(on_press=self.save_to_file)
+        done_btn.bind(on_press=lambda x: App.get_running_app().stop())
+        back_btn.bind(on_press=self.go_to_bin_config)
+        self.layout.add_widget(save_btn)
+        self.layout.add_widget(done_btn)
+        self.layout.add_widget(back_btn)
+        self.add_widget(self.layout)
+
+    def _update_rect(self, instance, value):
+        self.rect.pos = instance.pos
+        self.rect.size = instance.size
+
+    def on_enter(self):
+        app = App.get_running_app()
+        self.summary_layout.clear_widgets()
+        self.summary_layout.canvas.clear()
+
+        if app.bin_data:
+            max_rows = app.max_rows or 7
+            num_cols = 8
+            layout_width = self.summary_layout.width * 0.9  # Match BinConfigScreen width ratio
+            layout_height = max_rows * sp(50)  # Match BinConfigScreen row height
+            layout_x = (self.summary_layout.width - layout_width) / 2
+            # Target 65% from bottom of window, adjusted for layout position
+            target_y = Window.height * 0.65 - (layout_height / 2)  # Center the canvas at 65% from bottom
+            layout_y = max(0, target_y - self.summary_layout.y)  # Adjust for layout's y position
+
+            # Debug output to verify positions
+            print(f"SummaryScreen: Window.height={Window.height}, summary_layout.pos={self.summary_layout.pos}, "
+                  f"summary_layout.size={self.summary_layout.size}, layout_y={layout_y}, canvas_y={self.summary_layout.y + layout_y}")
+
+            # Use summary_layout's actual position
+            canvas_x = self.summary_layout.x + layout_x
+            canvas_y = self.summary_layout.y + layout_y
+
+            with self.summary_layout.canvas.before:
+                Color(1, 1, 1, 1)
+                self.summary_rect = Rectangle(size=(layout_width, layout_height), pos=(canvas_x, canvas_y))
+
+            self.summary_layout.bind(size=self._update_summary_rect, pos=self._update_summary_rect)
+
+            cell_width = layout_width / num_cols
+            cell_height = layout_height / max_rows
+
+            with self.summary_layout.canvas:
+                Color(0, 0, 0, 1)
+                for i in range(max_rows + 1):
+                    Line(points=[canvas_x, canvas_y + i * cell_height, canvas_x + layout_width, canvas_y + i * cell_height])
+                for i in range(num_cols + 1):
+                    Line(points=[canvas_x + i * cell_width, canvas_y, canvas_x + i * cell_width, canvas_y + layout_height])
+
+            for row in range(max_rows):
+                if row < len(app.bin_data):
+                    entry = app.bin_data[row]
+                    diameter = entry['diameter']
+                    items = sorted([item for item in entry['items'] if item in Config.ITEM_OPTIONS])
+                    lengths = sorted(entry['lengths'], key=convert_to_decimal)
+                    selected_items = items + lengths
+                    for col in range(min(num_cols, len(selected_items))):
+                        item_or_length = selected_items[col]
+                        size_text = f"{diameter} x {item_or_length}"
+                        item_label = Label(
+                            text=size_text,
+                            size_hint=(None, None),
+                            size=(cell_width, cell_height),
+                            pos=(canvas_x + col * cell_width, canvas_y + (max_rows - 1 - row) * cell_height),
+                            color=(0, 0, 0, 1),
+                            font_size=sp(14),
+                            halign='center',
+                            valign='center',
+                            text_size=(cell_width - sp(4), cell_height - sp(4))
+                        )
+                        self.summary_layout.add_widget(item_label)
+
+    def _update_summary_rect(self, instance, value):
+        app = App.get_running_app()
+        max_rows = app.max_rows or 7
+        layout_width = instance.width * 0.9  # Match BinConfigScreen width ratio
+        layout_height = max_rows * sp(50)  # Match BinConfigScreen row height
+        layout_x = (instance.width - layout_width) / 2
+        # Target 65% from bottom of window, adjusted for layout position
+        target_y = Window.height * 0.65 - (layout_height / 2)  # Center the canvas at 65% from bottom
+        layout_y = max(0, target_y - instance.y)  # Adjust for layout's y position
+
+        # Use summary_layout's actual position
+        canvas_x = instance.x + layout_x
+        canvas_y = instance.y + layout_y
+        self.summary_rect.pos = (canvas_x, canvas_y)
+        self.summary_rect.size = (layout_width, layout_height)
+
+    def save_to_file(self, instance):
+        app = App.get_running_app()
+        data = {
+            'name': app.name or "Not specified",
+            'phone': app.phone or "Not specified",
+            'bin_size': app.bin_size or "Not specified",
+            'material': app.material or "Not specified",
+            'bin_data': app.bin_data or []
+        }
+        # Raw LaTeX template before formatting
+        raw_latex = r"""
+\documentclass[a4paper,12pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{geometry}
+\geometry{a4paper, margin=1in}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{colortbl}
+\usepackage{xcolor}
+
+% Configuring fonts last
+\usepackage{times} % Reliable serif font
+
+\begin{document}
+
+\section*{Bolt Bin Configuration}
+
+\textbf{Name:} {name}
+\textbf{Phone:} {phone}
+\textbf{Bin Size:} {bin_size}
+\textbf{Material:} {material}
+
+\begin{longtable}{|p{2cm}|p{10cm}|}
+\hline
+\rowcolor{gray!20}
+\textbf{Diameter} & \textbf{Items/Lengths} \\ \hline
+\endhead
+
+{bin_table}
+\hline
+\end{longtable}
+
+\end{document}
+"""
+        # Debug: Print raw template and data
+        print(f"Raw LaTeX template: {raw_latex}")
+        print(f"Data: {data}")
+        # Format the LaTeX content
+        try:
+            latex_content = raw_latex.format(
+                name=data['name'],
+                phone=data['phone'],
+                bin_size=data['bin_size'],
+                material=data['material'],
+                bin_table=''.join(
+                    f"{diameter} & {', '.join(sorted(items + lengths))}\\\\ \hline\n" 
+                    for entry in data['bin_data'] 
+                    for diameter, items, lengths in [(entry.get('diameter', 'N/A'), entry.get('items', []), entry.get('lengths', []))] 
+                    if entry.get('items') or entry.get('lengths')
+                ) or r"None & N/A \\ \hline"
+            )
+            print(f"Formatted LaTeX: {latex_content}")
+        except KeyError as e:
+            print(f"KeyError during formatting: {e}")
+            raise  # Re-raise to show the popup
+
+        import os
+        import platform
+        import subprocess
+        import tempfile
+        if platform.system() == "Windows":
+            desktop_path = os.path.join(os.path.expanduser("~"), "Desktop", "bin_config.pdf")
+        else:
+            desktop_path = os.path.join(os.path.expanduser("~"), "Desktop", "bin_config.pdf")
+
+        # Use a temporary directory for LaTeX files
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_tex = os.path.join(temp_dir, "temp.tex")
+            with open(temp_tex, "w", encoding='utf-8') as f:
+                f.write(latex_content)
+
+            try:
+                # Check if pdflatex is available
+                result = subprocess.run(["pdflatex", "-version"], capture_output=True, text=True)
+                if result.returncode != 0:
+                    raise Exception("pdflatex not found. Please install TeX Live or MiKTeX. (e.g., 'brew install basictex' on macOS, or MiKTeX on Windows)")
+
+                # Compile LaTeX to PDF
+                compile_result = subprocess.run(["pdflatex", "-output-directory", temp_dir, temp_tex], 
+                                              capture_output=True, text=True, check=True)
+                print(f"pdflatex output: {compile_result.stdout}")
+                if compile_result.returncode != 0:
+                    raise Exception(f"pdflatex compilation failed: {compile_result.stderr}")
+
+                temp_pdf = os.path.join(temp_dir, "temp.pdf")
+                os.rename(temp_pdf, desktop_path)
+                popup = Popup(title='Success', content=Label(text='Configuration saved to bin_config.pdf on Desktop', font_size=sp(20), color=(1, 0, 0, 1)), size_hint=(0.5, 0.5), background_color=(0, 0, 0, 1))
+                popup.open()
+            except Exception as e:
+                print(f"Error during save: {str(e)}")  # Debug output
+                popup = Popup(title='Error', content=Label(text=f'Failed to save PDF: {str(e)}', font_size=sp(20), color=(1, 0, 0, 1)), size_hint=(0.5, 0.5), background_color=(0, 0, 0, 1))
+                popup.open()
+
+    def go_to_bin_config(self, instance):
+        self.manager.current = 'bin_config'
+
+
+
 
 class BoltBinApp(App):
     name = StringProperty('')
